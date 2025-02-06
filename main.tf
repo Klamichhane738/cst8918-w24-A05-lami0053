@@ -72,3 +72,47 @@ resource "azurerm_network_interface_security_group_association" "webserver" {
   network_interface_id      = azurerm_network_interface.webserver.id
   network_security_group_id = azurerm_network_security_group.webserver.id
 }
+# Define the init script template
+data "cloudinit_config" "init" {
+  gzip          = false
+  base64_encode = true
+
+  part {
+    filename     = "init.sh"
+    content_type = "text/x-shellscript"
+
+    content = file("${path.module}/init.sh")
+  }
+}
+# Define the virtual machine
+resource "azurerm_linux_virtual_machine" "webserver" {
+  name                  = "${var.labelPrefix}A05VM"
+  resource_group_name   = azurerm_resource_group.rg.name
+  location              = azurerm_resource_group.rg.location
+  network_interface_ids = [azurerm_network_interface.webserver.id]
+  size                  = "Standard_B1s"
+
+  os_disk {
+    name                 = "${var.labelPrefix}A05OSDisk"
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts-gen2"
+    version   = "latest"
+  }
+
+  computer_name                   = "${var.labelPrefix}A05VM"
+  admin_username                  = var.admin_username
+  disable_password_authentication = true
+
+  admin_ssh_key {
+    username   = var.admin_username
+    public_key = file("~/.ssh/id_rsa.pub")
+  }
+
+  custom_data = data.cloudinit_config.init.rendered
+}
